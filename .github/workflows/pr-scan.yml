@@ -45,3 +45,10 @@ jobs:
           
           echo "Running CVE Watch PR Scan..."
           ./ci/pr-scan.sh "$GIT_URL" "$REVISION"
+
+      - name: Upload Scan Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cve-scan-report
+          path: cvewatch-tools/out/scan_report.txt

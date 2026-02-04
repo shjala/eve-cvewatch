@@ -12,13 +12,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
-if [ $# -ne 2 ]; then
-    echo "Usage: $0 <master_scan.json> <pr_scan.json>" >&2
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <master_scan.json> <pr_scan.json> [report_file]" >&2
     exit 1
 fi
 
 MASTER_FILE="$1"
 PR_FILE="$2"
+REPORT_FILE="${3:-}"
 
 setup_python_env
 
@@ -30,4 +31,10 @@ fi
 
 # Run comparison
 log_info "Running comparison between master and PR scan results..."
-log_cmd python3 scan/compare.py "$MASTER_FILE" "$PR_FILE"
+
+RUN_CMD="python3 scan/compare.py $MASTER_FILE $PR_FILE"
+if [ -n "$REPORT_FILE" ]; then
+    $RUN_CMD 2>&1 | tee "$REPORT_FILE"
+else
+    log_cmd $RUN_CMD
+fi

@@ -24,6 +24,7 @@ source "$BASE_DIR/common.sh"
 
 SCAN_DIR="out/scans"
 CACHE_SOURCE_DIR="out/cache/data-source"
+REPORT_FILE="out/scan_report.txt"
 TEMP_DIR=""
 ALPINE_CACHE=""
 EVE_REPO_DIR=""
@@ -159,7 +160,7 @@ run_scans() {
 
 run_compare() {
     log_info "Comparing results..."
-    log_cmd "$BASE_DIR/compare.sh" "$TEMP_DIR/scan_results_master.json" "$TEMP_DIR/scan_results_pr.json"
+    log_cmd "$BASE_DIR/compare.sh" "$TEMP_DIR/scan_results_master.json" "$TEMP_DIR/scan_results_pr.json" "$REPORT_FILE"
 }
 
 # Main execution
