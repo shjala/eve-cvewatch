@@ -13,10 +13,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/common.sh"
 
 if [ $# -ne 2 ]; then
-    log_file_only=true
-    # Can't use log_error because it appends to LOG_FILE which is not set yet properly if sourced common.sh sets it default.
-    # But common.sh sets LOG_FILE to default if not set.
-    # However common.sh mkdirs LOG_DIR.
     echo "Usage: $0 <master_scan.json> <pr_scan.json>" >&2
     exit 1
 fi
