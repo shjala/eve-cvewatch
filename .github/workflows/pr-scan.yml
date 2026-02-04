@@ -7,7 +7,6 @@ on:
         description: 'Git URL of the EVE repository to scan'
         required: false
         type: string
-        default: 'https://github.com/lf-edge/eve.git'
       eve-revision:
         description: 'Revision to check out and scan'
         required: true
@@ -21,7 +20,7 @@ jobs:
       - name: Checkout CVE Watch Tools
         uses: actions/checkout@v4
         with:
-          repository: zededa/cvewatch 
+          repository: shjala/eve-cvewatch 
           path: cvewatch-tools
 
       - name: Set up Python
