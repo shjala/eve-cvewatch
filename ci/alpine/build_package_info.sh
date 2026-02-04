@@ -45,7 +45,7 @@ process_ref() {
         return 1
     fi
     
-    if python3 alpine/get_package_info.py "$ref" "$aports_dir" "$db_path" "$cpe_dict"; then
+    if python3 "$SCRIPT_DIR/get_package_info.py" "$ref" "$aports_dir" "$db_path" "$cpe_dict"; then
         log_info "SUCCESS: Processed $ref"
         return 0
     else
