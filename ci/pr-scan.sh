@@ -105,7 +105,7 @@ generate_pr_alpine_db() {
     local alpine_version
     alpine_version=$(cat "$TEMP_DIR/pr-alpine-version")
     local alpine_tag="v$alpine_version"
-    local db_path="$TEMP_DIR/pr_alpine_packages.json"
+    local db_path="$CACHE_SOURCE_DIR/alpine_packages_${alpine_version}.json"
     
     generate_alpine_db "$alpine_tag" "$db_path"
 }
@@ -127,19 +127,29 @@ get_master_info() {
         log_error "Could not retrieve master alpine version"
         exit 1
     fi
+
+    echo "$master_version" > "$TEMP_DIR/master-alpine-version"
     
     local master_alpine_tag="v$master_version"
-    local master_db_path="$TEMP_DIR/master_alpine_packages.json"
+    local master_db_path="$CACHE_SOURCE_DIR/alpine_packages_${master_version}.json"
     
     generate_alpine_db "$master_alpine_tag" "$master_db_path"
 }
 
 run_scans() {
-    local cvss_bt_path="out/cache/data-source/cvss-bt.csv"
+    local cvss_bt_path="$CACHE_SOURCE_DIR/cvss-bt.csv"
     
+    # Get versions
+    local pr_version
+    pr_version=$(cat "$TEMP_DIR/pr-alpine-version")
+    local pr_db_path="$CACHE_SOURCE_DIR/alpine_packages_${pr_version}.json"
+
+    local master_version
+    master_version=$(cat "$TEMP_DIR/master-alpine-version")
+    local master_db_path="$CACHE_SOURCE_DIR/alpine_packages_${master_version}.json"
+
     # Scan PR
-    log_info "Scanning PR..."
-    local pr_db_path="$TEMP_DIR/pr_alpine_packages.json"
+    log_info "Scanning PR (Alpine v$pr_version)..."
     local pr_sbom_path="$TEMP_DIR/pr-sbom.json"
     
     if ! run_cve_scanner "pr" "$pr_sbom_path" "$pr_db_path" "$TEMP_DIR" "$cvss_bt_path"; then
@@ -148,8 +158,7 @@ run_scans() {
     fi
 
     # Scan Master
-    log_info "Scanning Master..."
-    local master_db_path="$TEMP_DIR/master_alpine_packages.json"
+    log_info "Scanning Master (Alpine v$master_version)..."
     local master_sbom_path="$TEMP_DIR/master-sbom.json"
     
     if ! run_cve_scanner "master" "$master_sbom_path" "$master_db_path" "$TEMP_DIR" "$cvss_bt_path"; then
