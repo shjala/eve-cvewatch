@@ -1,0 +1,7 @@
+cvewatch/bin
+cvewatch/data
+.DS_Store
+ci/.venv
+ci/out/
+TODO
+cvewatch/

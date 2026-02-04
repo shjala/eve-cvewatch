@@ -1,0 +1,48 @@
+name: CVE Watch PR Scan
+
+on:
+  workflow_call:
+    inputs:
+      eve-repo-url:
+        description: 'Git URL of the EVE repository to scan'
+        required: false
+        type: string
+        default: 'https://github.com/lf-edge/eve.git'
+      eve-revision:
+        description: 'Revision to check out and scan'
+        required: true
+        type: string
+
+jobs:
+  pr-scan:
+    name: CVE Watch Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout CVE Watch Tools
+        uses: actions/checkout@v4
+        with:
+          repository: zededa/cvewatch 
+          path: cvewatch-tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl git make
+
+      - name: Run Scan Script
+        env:
+          GIT_URL: ${{ inputs.eve-repo-url }}
+          REVISION: ${{ inputs.eve-revision }}
+        run: |
+          cd cvewatch-tools
+          
+          # Ensure scripts are executable
+          chmod +x ci/*.sh ci/alpine/*.sh ci/eve/*.sh
+          
+          echo "Running CVE Watch PR Scan..."
+          ./ci/pr-scan.sh "$GIT_URL" "$REVISION"
