@@ -7,8 +7,8 @@
 
 # Logging configuration
 LOG_DIR="${LOG_DIR:-out/logs}"
-LOG_DIR="$(cd "$LOG_DIR" && pwd)"
 mkdir -p "$LOG_DIR"
+LOG_DIR="$(cd "$LOG_DIR" && pwd)"
 
 # Define LOG_FILE if not set. If set by caller, use it.
 if [ -z "${LOG_FILE:-}" ]; then
