@@ -179,7 +179,17 @@ run_cve_scanner() {
     local cvss_bt_path="${5:-out/cache/data-source/cvss-bt.csv}"
 
     log_info "Running scanner for $eve_arg..."
-    if ! python3 scan/scanner.py "$eve_arg" "$sbom_path" "$cvss_bt_path" "$db_path" "$output_dir"; then
+    # Locate scanner script relative to this common.sh file
+    local common_dir
+    common_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local scanner_script="$common_dir/scan/scanner.py"
+    
+    if [ ! -f "$scanner_script" ]; then
+        log_error "Scanner script not found at $scanner_script"
+        return 1
+    fi
+
+    if ! python3 "$scanner_script" "$eve_arg" "$sbom_path" "$cvss_bt_path" "$db_path" "$output_dir"; then
         log_error "Scanner failed for $eve_arg"
         return 1
     fi

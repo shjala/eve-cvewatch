@@ -23,16 +23,16 @@ REPORT_FILE="${3:-}"
 
 setup_python_env
 
-if [ ! -f "scan/compare.py" ]; then
-    log_error "Error: Cannot find scan/compare.py"
-    log_error "Please run this script from the ci/ directory."
+COMPARE_SCRIPT="$SCRIPT_DIR/scan/compare.py"
+if [ ! -f "$COMPARE_SCRIPT" ]; then
+    log_error "Error: Cannot find compare script at $COMPARE_SCRIPT"
     exit 1
 fi
 
 # Run comparison
 log_info "Running comparison between master and PR scan results..."
 
-RUN_CMD="python3 scan/compare.py $MASTER_FILE $PR_FILE"
+RUN_CMD="python3 $COMPARE_SCRIPT $MASTER_FILE $PR_FILE"
 if [ -n "$REPORT_FILE" ]; then
     $RUN_CMD 2>&1 | tee "$REPORT_FILE"
 else
