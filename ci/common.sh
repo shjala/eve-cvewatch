@@ -189,7 +189,7 @@ run_cve_scanner() {
         return 1
     fi
 
-    if ! python3 "$scanner_script" "$eve_arg" "$sbom_path" "$cvss_bt_path" "$db_path" "$output_dir"; then
+    if ! log_cmd python3 "$scanner_script" "$eve_arg" "$sbom_path" "$cvss_bt_path" "$db_path" "$output_dir"; then
         log_error "Scanner failed for $eve_arg"
         return 1
     fi
