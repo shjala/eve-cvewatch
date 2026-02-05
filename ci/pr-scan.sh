@@ -149,22 +149,34 @@ run_scans() {
     local master_db_path="$CACHE_SOURCE_DIR/alpine_packages_${master_version}.json"
 
     # Scan PR
-    log_info "Scanning PR (Alpine v$pr_version)..."
+    log_info "------------------------------------------------------------"
+    log_info "Starting PR Scan (Alpine v$pr_version)..."
+    log_info "PR SBOM Checksum: $(md5sum "$TEMP_DIR/pr-sbom.json" | awk '{print $1}')"
+    log_info "------------------------------------------------------------"
     local pr_sbom_path="$TEMP_DIR/pr-sbom.json"
     
     if ! run_cve_scanner "pr" "$pr_sbom_path" "$pr_db_path" "$TEMP_DIR" "$cvss_bt_path"; then
         log_error "PR scan failed"
         exit 1
     fi
+    log_info "------------------------------------------------------------"
+    log_info "PR Scan Finished."
+    log_info "------------------------------------------------------------"
 
     # Scan Master
-    log_info "Scanning Master (Alpine v$master_version)..."
+    log_info "------------------------------------------------------------"
+    log_info "Starting Master Scan (Alpine v$master_version)..."
+    log_info "Master SBOM Checksum: $(md5sum "$TEMP_DIR/master-sbom.json" | awk '{print $1}')"
+    log_info "------------------------------------------------------------"
     local master_sbom_path="$TEMP_DIR/master-sbom.json"
     
     if ! run_cve_scanner "master" "$master_sbom_path" "$master_db_path" "$TEMP_DIR" "$cvss_bt_path"; then
         log_error "Master scan failed"
         exit 1
     fi
+    log_info "------------------------------------------------------------"
+    log_info "Master Scan Finished."
+    log_info "------------------------------------------------------------"
 }
 
 run_compare() {
