@@ -48,17 +48,19 @@ if [[ "$EVE_TAG" == "master" ]]; then
   
     log_info "Processing master: $TAG"
 
-    if ! docker pull lfedge/eve:0.0.0-master-$latest_commit_hash-kvm-amd64; then
+    full_image_name="lfedge/eve:0.0.0-master-$latest_commit_hash-kvm-amd64"
+    log_info "Pulling docker image: $full_image_name"
+    if ! docker pull "$full_image_name"; then
         log_error "Failed to pull docker image for master $latest_commit_hash"
         exit 1
     fi
 
-    if ! docker run --rm lfedge/eve:0.0.0-master-$latest_commit_hash-kvm-amd64 sbom > $SBOM_PATH; then
+    if ! docker run --rm "$full_image_name" sbom > $SBOM_PATH; then
         log_error "Failed to generate SBOM for master $latest_commit_hash"
         exit 1
     fi
 
-    if ! docker rmi lfedge/eve:0.0.0-master-$latest_commit_hash-kvm-amd64; then
+    if ! docker rmi "$full_image_name"; then
         log_warn "Failed to remove docker image for master $latest_commit_hash"
     fi
 
