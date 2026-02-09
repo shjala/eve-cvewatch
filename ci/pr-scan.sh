@@ -43,18 +43,11 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
-# Clone EVE from GIT_URL and checkout REVISION
-clone_and_build_eve() {
-    log_info "Cloning EVE from $GIT_URL..."
-    EVE_REPO_DIR="$TEMP_DIR/eve"
-    log_cmd git clone "$GIT_URL" "$EVE_REPO_DIR"
-    
-    pushd "$EVE_REPO_DIR" > /dev/null
-    if [ "$REVISION" != "HEAD" ]; then
-        log_info "Checking out $REVISION..."
-        log_cmd git checkout "$REVISION"
-    fi
-    
+
+build_current_eve() {
+    local sbom_dest="$1"
+    local version_dest="$2"
+
     log_info "Building SBOM..."
     log_cmd make HV=kvm PLATFORM=generic ZARCH=amd64 LINUXKIT_PKG_TARGET=build pkgs sbom
     
@@ -71,12 +64,11 @@ clone_and_build_eve() {
     
     if [ -z "$sbom_rel_path" ] || [ ! -f "$sbom_rel_path" ]; then
         log_error "SBOM file not found after build."
-        popd > /dev/null
         return 1
     fi
 
     log_info "Found SBOM at $sbom_rel_path"
-    cp "$sbom_rel_path" "$TEMP_DIR/pr-sbom.json"
+    cp "$sbom_rel_path" "$sbom_dest"
     
     # Get Alpine version
     if [ -f "pkg/alpine/Dockerfile" ]; then
@@ -86,16 +78,38 @@ clone_and_build_eve() {
             if [[ ! "$alpine_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
                 alpine_version="${alpine_version}.0"
             fi
-            echo "$alpine_version" > "$TEMP_DIR/pr-alpine-version"
+            echo "$alpine_version" > "$version_dest"
         else
             log_error "Could not find ALPINE_VERSION in Dockerfile"
-            popd > /dev/null
             return 1
         fi
     else
         log_error "pkg/alpine/Dockerfile not found"
-        popd > /dev/null
         return 1
+    fi
+}
+
+# Clone EVE from GIT_URL and checkout REVISION
+clone_and_build_eve() {
+    log_info "Cloning EVE from $GIT_URL..."
+    EVE_REPO_DIR="$TEMP_DIR/eve"
+    log_cmd git clone "$GIT_URL" "$EVE_REPO_DIR"
+    
+    pushd "$EVE_REPO_DIR" > /dev/null
+    if [ "$REVISION" != "HEAD" ]; then
+        log_info "Checking out $REVISION..."
+        log_cmd git checkout "$REVISION"
+    fi
+    
+    local commit_info
+    commit_info=$(git log -1 --format='%h %s')
+    echo "$commit_info" > "$TEMP_DIR/pr-commit-info"
+    log_info "PR Commit: $commit_info"
+
+    if ! build_current_eve "$TEMP_DIR/pr-sbom.json" "$TEMP_DIR/pr-alpine-version"; then
+        log_error "Failed to build PR version"
+        popd > /dev/null
+        exit 1
     fi
     
     popd > /dev/null
@@ -113,22 +127,57 @@ generate_pr_alpine_db() {
 get_master_info() {
     log_info "Getting Master SBOM..."
     local master_sbom_path="$TEMP_DIR/master-sbom.json"
-    # Use existing tool to get master SBOM from docker
-    if ! log_cmd bash "$BASE_DIR/eve/get_sbom.sh" "master" "$master_sbom_path"; then
-        log_error "Failed to get master SBOM"
-        exit 1
+    local master_version_path="$TEMP_DIR/master-alpine-version"
+    
+    # Try to get from docker first
+    if log_cmd bash "$BASE_DIR/eve/get_sbom.sh" "master" "$master_sbom_path"; then
+        # We need master's alpine version.
+        # Fetch from GitHub raw content
+        log_info "Fetching Master Alpine version..."
+        local master_version
+        if ! master_version=$(get_remote_alpine_version "master"); then
+            log_error "Could not retrieve master alpine version"
+            exit 1
+        fi
+        echo "$master_version" > "$master_version_path"
+
+        # Fetch master commit info
+        log_info "Fetching Master commit info..."
+        local master_commit_info
+        if master_commit_info=$(curl -s "https://api.github.com/repos/lf-edge/eve/commits/master" | jq -r '.sha[0:8] + " " + .commit.message' | head -n 1); then
+             echo "$master_commit_info" > "$TEMP_DIR/master-commit-info"
+             log_info "Master Commit (Remote): $master_commit_info"
+        else
+             echo "Unknown Master Commit" > "$TEMP_DIR/master-commit-info"
+        fi
+
+    else
+        log_warn "Failed to get master SBOM from docker image. Falling back to build from source."
+        
+        if [ -z "${EVE_REPO_DIR:-}" ] || [ ! -d "$EVE_REPO_DIR" ]; then
+             log_error "EVE source directory not found. Cannot build master."
+             exit 1
+        fi
+
+        pushd "$EVE_REPO_DIR" > /dev/null
+        log_info "Checking out master..."
+        log_cmd git checkout master
+        
+        local commit_info
+        commit_info=$(git log -1 --format='%h %s')
+        echo "$commit_info" > "$TEMP_DIR/master-commit-info"
+        log_info "Master Commit: $commit_info"
+
+        if ! build_current_eve "$master_sbom_path" "$master_version_path"; then
+             log_error "Failed to build master from source."
+             popd > /dev/null
+             exit 1
+        fi
+        popd > /dev/null
     fi
     
-    # We need master's alpine version.
-    # Fetch from GitHub raw content
-    log_info "Fetching Master Alpine version..."
     local master_version
-    if ! master_version=$(get_remote_alpine_version "master"); then
-        log_error "Could not retrieve master alpine version"
-        exit 1
-    fi
-
-    echo "$master_version" > "$TEMP_DIR/master-alpine-version"
+    master_version=$(cat "$master_version_path")
     
     local master_alpine_tag="v$master_version"
     local master_db_path="$CACHE_SOURCE_DIR/alpine_packages_${master_version}.json"
@@ -148,9 +197,16 @@ run_scans() {
     master_version=$(cat "$TEMP_DIR/master-alpine-version")
     local master_db_path="$CACHE_SOURCE_DIR/alpine_packages_${master_version}.json"
 
+    local pr_commit="Unknown"
+    [ -f "$TEMP_DIR/pr-commit-info" ] && pr_commit=$(cat "$TEMP_DIR/pr-commit-info")
+    
+    local master_commit="Unknown"
+    [ -f "$TEMP_DIR/master-commit-info" ] && master_commit=$(cat "$TEMP_DIR/master-commit-info")
+
     # Scan PR
     log_info "------------------------------------------------------------"
     log_info "Starting PR Scan (Alpine v$pr_version)..."
+    log_info "Commit: $pr_commit"
     log_info "PR SBOM Checksum: $(md5sum "$TEMP_DIR/pr-sbom.json" | awk '{print $1}')"
     log_info "------------------------------------------------------------"
     local pr_sbom_path="$TEMP_DIR/pr-sbom.json"
@@ -166,6 +222,7 @@ run_scans() {
     # Scan Master
     log_info "------------------------------------------------------------"
     log_info "Starting Master Scan (Alpine v$master_version)..."
+    log_info "Commit: $master_commit"
     log_info "Master SBOM Checksum: $(md5sum "$TEMP_DIR/master-sbom.json" | awk '{print $1}')"
     log_info "------------------------------------------------------------"
     local master_sbom_path="$TEMP_DIR/master-sbom.json"
