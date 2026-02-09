@@ -100,6 +100,14 @@ def main():
         print(f"    Version: {info['version']}")
         print(f"    Vuln ID: {vuln.get('id')}")
         print(f"    Severity: {vuln.get('summary', 'No summary available')}")
+        
+        details = vuln.get('details', '')
+        if details:
+            # simple wrap or limit
+            if len(details) > 200:
+                details = details[:197] + "..."
+            print(f"    Details: {details.replace(chr(10), ' ')}")
+
         print(f"    Fixed In: {extract_fix_version(vuln)}")
         
         # Link to details
