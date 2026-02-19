@@ -249,7 +249,7 @@ if [ "$PARALLEL" = true ]; then
     else
       EVE_ARG="$TAG"
     fi
-    SBOM_PATH="cache/sbom/eve-sbom-${TAG}.json"
+    SBOM_PATH="out/cache/sbom/eve-sbom-${TAG}.json"
     
     (
       run_scanner "$TAG" "$SBOM_PATH" "$EVE_ARG"
@@ -288,7 +288,7 @@ else
     else
       EVE_ARG="$TAG"
     fi
-     SBOM_PATH="cache/sbom/eve-sbom-${TAG}.json"
+     SBOM_PATH="out/cache/sbom/eve-sbom-${TAG}.json"
      run_scanner "$TAG" "$SBOM_PATH" "$EVE_ARG"
   done
   
