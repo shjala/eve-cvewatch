@@ -87,11 +87,6 @@ download_cvss_db() {
     local cvss_url="${2:-https://api.github.com/repos/t0sche/cvss-bt/releases/latest}"
     local target_file="$cache_dir/cvss-bt.csv"
 
-    if [ -f "$target_file" ]; then
-        log_info "CVSS DB already exists at $target_file, skipping download."
-        return 0
-    fi
-
     log_info "Downloading cvss-bt.csv..."
     local download_url
     download_url=$(curl -s "$cvss_url" | jq -r '.assets[0].browser_download_url')
