@@ -538,7 +538,11 @@ def main(eve_tag, sbom_file, cvss_bt_path, alpine_db_path, output_dir):
         vulns_data = None
 
         if pkg_info['ecosystem'] == 'Linux' or pkg_info['name'] == 'Kernel':
-            pkg_info['version'] = re.match(r'\d+\.\d+\.\d+', pkg_info['version'])[0]
+            ver_match = re.match(r'\d+\.\d+\.\d+', pkg_info['version'] or '')
+            if not ver_match:
+                print(f"    Warning: Could not extract kernel version from '{pkg_info['version']}', skipping.")
+                continue
+            pkg_info['version'] = ver_match[0]
             print(f"    Checking Linux kernel vulnerabilities for version {pkg_info['version']}...")
             if linux_db is None:
                 linux_db = load_linux_kernel_db()
