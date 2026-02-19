@@ -19,6 +19,7 @@ source "$SCRIPT_DIR/common.sh"
 
 PARALLEL=false
 FETCH_ONLY=false
+UPLOAD=false
 ALL_TAGS=""
 ALPINE_CACHE=""
 TEMP_DIR=""
@@ -191,6 +192,48 @@ run_scanner() {
     log_info "  - Completed scanning $tag"
 }
 
+upload_scan() {
+    local tag="$1"
+    local scan_file="$2"
+    local is_master="$3"
+
+    if [ ! -f "$scan_file" ]; then
+        log_error "Scan file not found: $scan_file"
+        return 1
+    fi
+
+    local version="$tag"
+    local curl_args=(
+        -s -S
+        -X POST
+        -H "Authorization: Bearer ${CVEWATCH_TOKEN}"
+        -F "file=@${scan_file}"
+        -F "version=${version}"
+        -w "\n%{http_code}"
+    )
+
+    if [ "$is_master" = true ]; then
+        curl_args+=(-F "master=true")
+    fi
+
+    log_info "  - Uploading scan for $tag (master=$is_master)..."
+    local response
+    response=$(curl "${curl_args[@]}" "${CVEWATCH_URL}/api/v1/scan")
+    local http_code
+    http_code=$(echo "$response" | tail -n1)
+    local body
+    body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" = "202" ] || [ "$http_code" = "201" ]; then
+        local scan_id
+        scan_id=$(echo "$body" | jq -r '.id // empty')
+        log_info "  - Upload successful for $tag (scan ID: ${scan_id:-unknown})"
+    else
+        log_error "  - Upload failed for $tag (HTTP $http_code): $body"
+        return 1
+    fi
+}
+
 # main starts here...
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -202,12 +245,28 @@ while [[ $# -gt 0 ]]; do
       FETCH_ONLY=true
       shift
       ;;
+    -u|--upload)
+      UPLOAD=true
+      shift
+      ;;
     *)
       log_error "Unknown option: $1"
       exit 1
       ;;
   esac
 done
+
+if [ "$UPLOAD" = true ]; then
+    if [ -z "${CVEWATCH_URL:-}" ]; then
+        log_error "CVEWATCH_URL environment variable is required for upload mode"
+        exit 1
+    fi
+    if [ -z "${CVEWATCH_TOKEN:-}" ]; then
+        log_error "CVEWATCH_TOKEN environment variable is required for upload mode"
+        exit 1
+    fi
+    log_info "Upload mode enabled. Target: $CVEWATCH_URL"
+fi
 
 LOG_FILE="$LOG_DIR/full-scan.log"
 export LOG_FILE
@@ -280,16 +339,40 @@ if [ "$PARALLEL" = true ]; then
   else
     log_warn "$FAILED scanner(s) failed"
   fi
+
+  # Upload scans if --upload is enabled
+  if [ "$UPLOAD" = true ]; then
+    log_info "Uploading scan results..."
+    for TAG in $ALL_TAGS; do
+      if [[ "$TAG" == master-* ]]; then
+        EVE_ARG="master"
+        IS_MASTER=true
+      else
+        EVE_ARG="$TAG"
+        IS_MASTER=false
+      fi
+      SCAN_FILE="${SCAN_DIR}/scan_results_${EVE_ARG}.json"
+      upload_scan "$TAG" "$SCAN_FILE" "$IS_MASTER" || log_warn "Upload failed for $TAG, continuing..."
+    done
+  fi
 else
   for TAG in $ALL_TAGS; do
     log_info "=== Scanning tag: $TAG ==="
     if [[ "$TAG" == master-* ]]; then
       EVE_ARG="master"
+      IS_MASTER=true
     else
       EVE_ARG="$TAG"
+      IS_MASTER=false
     fi
      SBOM_PATH="out/cache/sbom/eve-sbom-${TAG}.json"
      run_scanner "$TAG" "$SBOM_PATH" "$EVE_ARG"
+
+     # Upload scan if --upload is enabled
+     if [ "$UPLOAD" = true ]; then
+       SCAN_FILE="${SCAN_DIR}/scan_results_${EVE_ARG}.json"
+       upload_scan "$TAG" "$SCAN_FILE" "$IS_MASTER" || log_warn "Upload failed for $TAG, continuing..."
+     fi
   done
   
   log_info "All processing completed!"
