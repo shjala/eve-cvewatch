@@ -312,6 +312,8 @@ def get_osv_vulnerabilities(name=None, version=None, ecosystem=None, purl=None, 
         return {"vulns": all_vulns} if all_vulns else None
 
 def load_linux_kernel_db(cache_dir="out/cache/osv"):
+    """Download (or use cached) Linux kernel vulnerability zip.
+    Returns the path to the zip file, or None on failure."""
     os.makedirs(cache_dir, exist_ok=True)
     zip_path = os.path.join(cache_dir, "Linux_all.zip")
     url = "https://osv-vulnerabilities.storage.googleapis.com/Linux/all.zip"
@@ -334,28 +336,13 @@ def load_linux_kernel_db(cache_dir="out/cache/osv"):
             else:
                 print(f"Error downloading Linux DB: {response.status_code}")
                 if not os.path.exists(zip_path):
-                    return []
+                    return None
         except Exception as e:
             print(f"Exception downloading Linux DB: {e}")
             if not os.path.exists(zip_path):
-                return []
+                return None
 
-    print("Loading Linux DB into memory...")
-    vulns = []
-    try:
-        with zipfile.ZipFile(zip_path, "r") as z:
-            for filename in z.namelist():
-                if filename.endswith(".json"):
-                    with z.open(filename) as f:
-                        try:
-                            vulns.append(json.load(f))
-                        except: pass
-    except Exception as e:
-        print(f"Error reading Linux DB zip: {e}")
-        return []
-
-    print(f"Loaded {len(vulns)} Linux vulnerability records.")
-    return vulns
+    return zip_path
 
 
 # this is hacky 
@@ -411,50 +398,71 @@ def get_eve_kernel_version(eve_tag):
     return kernel_ver
 
 
-def check_linux_kernel_vulns(version_str, db):
+def check_linux_kernel_vulns(version_str, db_zip_path):
+    """Stream through the Linux DB zip and return only matching vulns.
+    Processes one record at a time to avoid loading the entire DB into memory."""
     found_vulns = []
     try:
         target_ver = packaging_version.parse(version_str)
     except:
         return []
 
-    for vuln in db:
-        affected_list = vuln.get('affected', [])
-        for affected in affected_list:
-            pkg = affected.get('package', {})
-            # Match strictly against "Linux" ecosystem. Name usually "Kernel" or "Linux".
-            if pkg.get('ecosystem') != 'Linux':
-                continue
-                
-            ranges = affected.get('ranges', [])
-            for r in ranges:
-                if r.get('type') in ['SEMVER', 'ECOSYSTEM']:
-                    events = r.get('events', [])
-                    is_vuln_in_range = False
-                    
-                    for event in events:
-                        if 'introduced' in event:
-                            intro = event['introduced']
-                            try:
-                                if intro == '0' or target_ver >= packaging_version.parse(intro):
-                                    is_vuln_in_range = True
-                            except: pass
-                        elif 'fixed' in event:
-                            fixed = event['fixed']
-                            try:
-                                if target_ver >= packaging_version.parse(fixed):
-                                    is_vuln_in_range = False
-                            except: pass
-                        elif 'last_affected' in event:
-                            last = event['last_affected']
-                            try:
-                                if target_ver > packaging_version.parse(last):
-                                    is_vuln_in_range = False
-                            except: pass
-                            
-                    if is_vuln_in_range:
-                        found_vulns.append(vuln)
-                        break 
+    if not db_zip_path or not os.path.exists(db_zip_path):
+        print("Error: Linux DB zip not available")
+        return []
+
+    checked = 0
+    try:
+        with zipfile.ZipFile(db_zip_path, "r") as z:
+            for filename in z.namelist():
+                if not filename.endswith(".json"):
+                    continue
+                with z.open(filename) as f:
+                    try:
+                        vuln = json.load(f)
+                    except:
+                        continue
+                checked += 1
+                matched = False
+                affected_list = vuln.get('affected', [])
+                for affected in affected_list:
+                    if matched:
+                        break
+                    pkg = affected.get('package', {})
+                    if pkg.get('ecosystem') != 'Linux':
+                        continue
+                    ranges = affected.get('ranges', [])
+                    for r in ranges:
+                        if r.get('type') in ['SEMVER', 'ECOSYSTEM']:
+                            events = r.get('events', [])
+                            is_vuln_in_range = False
+                            for event in events:
+                                if 'introduced' in event:
+                                    intro = event['introduced']
+                                    try:
+                                        if intro == '0' or target_ver >= packaging_version.parse(intro):
+                                            is_vuln_in_range = True
+                                    except: pass
+                                elif 'fixed' in event:
+                                    fixed = event['fixed']
+                                    try:
+                                        if target_ver >= packaging_version.parse(fixed):
+                                            is_vuln_in_range = False
+                                    except: pass
+                                elif 'last_affected' in event:
+                                    last = event['last_affected']
+                                    try:
+                                        if target_ver > packaging_version.parse(last):
+                                            is_vuln_in_range = False
+                                    except: pass
+                            if is_vuln_in_range:
+                                found_vulns.append(vuln)
+                                matched = True
+                                break
+    except Exception as e:
+        print(f"Error streaming Linux DB zip: {e}")
+
+    print(f"Checked {checked} Linux records, found {len(found_vulns)} matching vulnerabilities.")
     return found_vulns
     
 def get_package_vulnerabilities(package_name, version, ecosystem, max_retries=10):
@@ -511,7 +519,7 @@ def main(eve_tag, sbom_file, cvss_bt_path, alpine_db_path, output_dir):
         cvss_data = {}
 
     alpine_db, alpine_db_by_cpe = load_alpine_db(alpine_db_path)
-    linux_db = None
+    linux_db_zip = None
 
     # Check for Linux kernel in packages
     kernel_found = False
@@ -557,10 +565,10 @@ def main(eve_tag, sbom_file, cvss_bt_path, alpine_db_path, output_dir):
                 continue
             pkg_info['version'] = ver_match[0]
             print(f"    Checking Linux kernel vulnerabilities for version {pkg_info['version']}...")
-            if linux_db is None:
-                linux_db = load_linux_kernel_db()
+            if linux_db_zip is None:
+                linux_db_zip = load_linux_kernel_db()
             print(f"    Checking against local Linux DB...")
-            vulns_list = check_linux_kernel_vulns(pkg_info['version'], linux_db)
+            vulns_list = check_linux_kernel_vulns(pkg_info['version'], linux_db_zip)
             print(f"    Found {len(vulns_list)} Linux kernel vulnerabilities.")
             vulns_data = {"vulns": vulns_list}
         else:
