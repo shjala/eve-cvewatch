@@ -32,3 +32,37 @@ You can run the PR scanner locally to check a branch before pushing.
 # Usage: ./ci/pr-scan.sh <GIT_URL> [REVISION]
 ./ci/pr-scan.sh https://github.com/lf-edge/eve.git my-feature-branch
 ```
+
+## Full Scan with Upload
+
+Scans all supported EVE LTS tags + master and uploads results to a CVEWatch instance.
+
+```bash
+# Required environment variables
+export CVEWATCH_URL=http://10.208.13.68   # CVEWatch server URL
+export CVEWATCH_TOKEN=<upload-token>       # Generate via UI: Profile → Upload Tokens
+
+# Run once
+./ci/full-scan.sh --upload
+
+# Parallel scanning (faster, one scanner per tag)
+./ci/full-scan.sh --upload --parallel
+```
+
+### Automated Daily Scan (cron)
+
+```bash
+sudo crontab -e
+```
+
+```cron
+0 3 * * * CVEWATCH_URL=http://10.208.13.68 CVEWATCH_TOKEN=<token> /path/to/ci/full-scan.sh --upload --parallel >> /var/log/cvewatch-scan.log 2>&1
+```
+
+### Options
+
+| Flag | Description |
+|------|-------------|
+| `-u`, `--upload` | Upload scan results to `CVEWATCH_URL` |
+| `-p`, `--parallel` | Run scanners in parallel |
+| `-f`, `--fetch-only` | Fetch SBOMs and Alpine data only, skip scanning |
