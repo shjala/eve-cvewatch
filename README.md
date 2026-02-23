@@ -56,7 +56,7 @@ sudo crontab -e
 ```
 
 ```cron
-0 3 * * * CVEWATCH_URL=http://10.208.13.68 CVEWATCH_TOKEN=<token> /path/to/ci/full-scan.sh --upload --parallel >> /var/log/cvewatch-scan.log 2>&1
+0 3 * * * cd /path/to/ci && CVEWATCH_URL=http://10.208.13.68 CVEWATCH_TOKEN=<token> ./full-scan.sh --upload --parallel >> /var/log/cvewatch-scan.log 2>&1
 ```
 
 ### Options
