@@ -318,9 +318,9 @@ def load_linux_kernel_db(cache_dir="out/cache/osv"):
     
     should_download = True
     if os.path.exists(zip_path):
-        # Check if file is older than 24 hours
+        # Check if file is older than 8 hours
         file_age = time.time() - os.path.getmtime(zip_path)
-        if file_age < 86400:
+        if file_age < 28800:
             should_download = False
             print(f"Using cached Linux DB (age: {file_age/3600:.1f} hours)")
     
@@ -480,6 +480,19 @@ def get_package_vulnerabilities(package_name, version, ecosystem, max_retries=10
 def get_cache_dir():
     current_date = datetime.now().strftime("%Y-%m-%d")
     cache_dir = os.path.join("/tmp", f"cve_cache_{current_date}")
+    # Clean up cache directories older than 8 hours
+    import glob
+    max_age = 28800  # 8 hours in seconds
+    for old_dir in glob.glob("/tmp/cve_cache_*"):
+        if os.path.isdir(old_dir):
+            dir_age = time.time() - os.path.getmtime(old_dir)
+            if dir_age > max_age:
+                try:
+                    import shutil
+                    shutil.rmtree(old_dir)
+                    print(f"Cleaned up stale cache: {old_dir} (age: {dir_age/3600:.1f}h)")
+                except Exception as e:
+                    print(f"Warning: failed to clean {old_dir}: {e}")
     return cache_dir
 
 def main(eve_tag, sbom_file, cvss_bt_path, alpine_db_path, output_dir):
