@@ -329,10 +329,11 @@ def load_linux_kernel_db(cache_dir="out/cache/osv"):
     if should_download:
         print(f"Downloading Linux DB from {url}...")
         try:
-            response = requests.get(url, timeout=120)
+            response = requests.get(url, timeout=120, stream=True)
             if response.status_code == 200:
                 with open(zip_path, "wb") as f:
-                    f.write(response.content)
+                    for chunk in response.iter_content(chunk_size=65536):
+                        f.write(chunk)
             else:
                 print(f"Error downloading Linux DB: {response.status_code}")
                 if not os.path.exists(zip_path):
@@ -647,9 +648,13 @@ def main(eve_tag, sbom_file, cvss_bt_path, alpine_db_path, output_dir):
         
     print(f"Total vulnerabilities found: {len(release_vulns)}")
 
+    # Free large lookup structures no longer needed
+    del alpine_db, alpine_db_by_cpe, cvss_data
+
     # Close cache to ensure all writes are flushed
+    cache_size = len(cache)
     cache.close()
-    print(f"Cache saved to {cache_dir} with {len(cache)} entries")
+    print(f"Cache saved to {cache_dir} with {cache_size} entries")
 
     # save results to JSON file
     output_file = os.path.join(output_dir, f"scan_results_{eve_tag.replace('/', '_')}.json")
