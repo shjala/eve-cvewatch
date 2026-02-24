@@ -377,3 +377,9 @@ else
   
   log_info "All processing completed!"
 fi
+
+# Clean up scan results after successful upload to avoid disk buildup
+if [ "$UPLOAD" = true ] && [ -d "$SCAN_DIR" ]; then
+    log_info "Cleaning up scan results in $SCAN_DIR..."
+    rm -rf "$SCAN_DIR"
+fi

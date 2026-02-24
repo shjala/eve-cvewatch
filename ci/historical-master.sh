@@ -452,3 +452,9 @@ log_info "============================================================"
 if [ "$FAILED" -gt 0 ]; then
     log_warn "Some months failed. Check the log for details: $LOG_FILE"
 fi
+
+# Clean up scan results after successful upload to avoid disk buildup
+if [ "$UPLOAD" = true ] && [ -d "$SCAN_DIR" ]; then
+    log_info "Cleaning up scan results in $SCAN_DIR..."
+    rm -rf "$SCAN_DIR"
+fi
