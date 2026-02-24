@@ -185,15 +185,6 @@ run_scanner() {
     log_info "  - SBOM path: $sbom_path"
     
     log_info "  - Running scanner..."
-
-    # Clear the Python scanner's disk cache before each scan to avoid
-    # stale OSV query results from a different tag's SBOM polluting results
-    local python_cache_dir="/tmp/cve_cache_$(date +%Y-%m-%d)"
-    if [ -d "$python_cache_dir" ]; then
-        log_info "  - Clearing scanner disk cache: $python_cache_dir"
-        rm -rf "$python_cache_dir"
-    fi
-
     if ! run_cve_scanner "$eve_arg" "$sbom_path" "$db_path" "$SCAN_DIR" "$cvss_bt_path"; then
         log_warn "Scanner failed for $tag"
         return 1
@@ -282,6 +273,14 @@ export LOG_FILE
 
 setup_environment
 download_cvss_db "$CACHE_SOURCE_DIR" "$CVSS_BT_URL"
+
+# Clear the Python scanner's disk cache once at startup to avoid
+# stale OSV query results from previous runs
+PYTHON_CACHE_DIR="/tmp/cve_cache_$(date +%Y-%m-%d)"
+if [ -d "$PYTHON_CACHE_DIR" ]; then
+    log_info "Clearing scanner disk cache: $PYTHON_CACHE_DIR"
+    rm -rf "$PYTHON_CACHE_DIR"
+fi
 
 # fetch all eve lts tags + master
 log_info "Fetching EVE tags..."
