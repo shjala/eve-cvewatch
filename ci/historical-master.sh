@@ -422,6 +422,15 @@ for TARGET_DATE in $MONTH_TARGETS; do
         CVSS_BT_PATH="$CACHE_SOURCE_DIR/cvss-bt.csv"
 
         log_info "  Running CVE scan for $SCAN_LABEL..."
+
+        # Clear the Python scanner's disk cache before each scan to avoid
+        # stale OSV query results from a different month's SBOM polluting results
+        PYTHON_CACHE_DIR="/tmp/cve_cache_$(date +%Y-%m-%d)"
+        if [ -d "$PYTHON_CACHE_DIR" ]; then
+            log_info "  Clearing scanner disk cache: $PYTHON_CACHE_DIR"
+            rm -rf "$PYTHON_CACHE_DIR"
+        fi
+
         if ! run_cve_scanner "$SCAN_LABEL" "$SBOM_PATH" "$DB_PATH" "$SCAN_DIR" "$CVSS_BT_PATH"; then
             log_error "  Scan failed for $SCAN_LABEL"
             FAILED=$((FAILED + 1))
