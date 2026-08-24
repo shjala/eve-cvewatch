@@ -17,6 +17,33 @@ def load_scan_results(filepath):
         print(f"Error loading {filepath}: {e}")
         sys.exit(1)
 
+def load_ignore_list(filepath):
+    """
+    Reads an ignore file and returns a set of vulnerability IDs.
+    Format: one ID per line (CVE-..., GHSA-..., etc.), '#' starts a
+    comment, blank lines are skipped. Matching is case-insensitive.
+    """
+    ignored = set()
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            for line in f:
+                entry = line.split('#', 1)[0].strip()
+                if entry:
+                    ignored.add(entry.upper())
+    except Exception as e:
+        print(f"Error loading ignore file {filepath}: {e}")
+        sys.exit(1)
+    return ignored
+
+def is_ignored(vuln, ignore_ids):
+    """True if the vuln ID or any of its aliases is in the ignore set."""
+    if not ignore_ids:
+        return False
+    ids = [vuln.get("id")]
+    ids += vuln.get("aliases") or []
+    ids += vuln.get("upstream") or []
+    return any(i and i.upper() in ignore_ids for i in ids)
+
 def get_vuln_set(results):
     """
     Parses scan results and returns a dictionary mapping:
@@ -59,8 +86,8 @@ def extract_fix_version(vuln):
     return ", ".join(sorted(fixed_versions)) if fixed_versions else "Unknown"
 
 def main():
-    if len(sys.argv) != 3:
-        print("Usage: python3 compare.py <scr_scan.json> <dst_scan.json>")
+    if len(sys.argv) not in (3, 4):
+        print("Usage: python3 compare.py <scr_scan.json> <dst_scan.json> [ignore_file]")
         sys.exit(1)
 
     scr_file = sys.argv[1]
@@ -74,6 +101,14 @@ def main():
         print(f"Error: destination scan file not found: {dst_file}")
         sys.exit(1)
 
+    ignore_ids = set()
+    if len(sys.argv) == 4:
+        ignore_ids = load_ignore_list(sys.argv[3])
+        print(f"Ignore file found: {sys.argv[3]}")
+        print(f"Loaded {len(ignore_ids)} ignored vulnerability IDs:")
+        for ignored_id in sorted(ignore_ids):
+            print(f"  {ignored_id}")
+
     print(f"Comparing destination scan: {dst_file}")
     print(f"     Against source scan: {scr_file}")
     master_data = load_scan_results(scr_file)
@@ -83,10 +118,20 @@ def main():
     pr_map = get_vuln_set(pr_data)
 
     new_vulns = []
+    ignored_vulns = []
 
     for key, info in pr_map.items():
-        if key not in master_map:
-            new_vulns.append(info)
+        if key in master_map:
+            continue
+        if is_ignored(info["vuln"], ignore_ids):
+            ignored_vulns.append(info)
+            continue
+        new_vulns.append(info)
+
+    if ignored_vulns:
+        print(f"\nIgnored {len(ignored_vulns)} vulnerabilities listed in the ignore file:")
+        for info in ignored_vulns:
+            print(f"  {info['vuln'].get('id')} (package: {info['pkg_name']})")
 
     if not new_vulns:
         print("\nNo vulnerabilities introduced.")

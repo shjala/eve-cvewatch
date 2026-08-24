@@ -106,6 +106,13 @@ clone_and_build_eve() {
     echo "$commit_info" > "$TEMP_DIR/pr-commit-info"
     log_info "PR Commit: $commit_info"
 
+    # Save the CVE ignore file from the PR revision, if present. The repo
+    # tree may be re-checked out to master later, so keep a copy.
+    if [ -f ".cve-ignore" ]; then
+        cp ".cve-ignore" "$TEMP_DIR/cve-ignore"
+        log_info "Found .cve-ignore in the EVE repo"
+    fi
+
     if ! build_current_eve "$TEMP_DIR/pr-sbom.json" "$TEMP_DIR/pr-alpine-version"; then
         log_error "Failed to build PR version"
         popd > /dev/null
@@ -238,7 +245,12 @@ run_scans() {
 
 run_compare() {
     log_info "Comparing results..."
-    log_cmd "$BASE_DIR/compare.sh" "$TEMP_DIR/scan_results_master.json" "$TEMP_DIR/scan_results_pr.json" "$REPORT_FILE"
+    if [ -f "$TEMP_DIR/cve-ignore" ]; then
+        log_info "Applying CVE ignore list from the EVE repo (.cve-ignore)"
+        log_cmd "$BASE_DIR/compare.sh" "$TEMP_DIR/scan_results_master.json" "$TEMP_DIR/scan_results_pr.json" "$REPORT_FILE" "$TEMP_DIR/cve-ignore"
+    else
+        log_cmd "$BASE_DIR/compare.sh" "$TEMP_DIR/scan_results_master.json" "$TEMP_DIR/scan_results_pr.json" "$REPORT_FILE"
+    fi
 }
 
 # Main execution
