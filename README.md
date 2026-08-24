@@ -24,6 +24,21 @@ jobs:
       eve-revision: ${{ github.event.pull_request.head.sha }}
 ```
 
+### Ignoring vulnerabilities
+
+The PR gate reads a `.cve-ignore` file from the root of the scanned EVE
+repository (at the PR revision). IDs listed there are excluded from the
+report and do not fail CI. One vulnerability ID per line (`CVE-...`,
+`GHSA-...`, ...), `#` starts a comment, blank lines are skipped. Matching
+is case-insensitive and also covers a vulnerability's aliases, so a CVE ID
+matches the corresponding GHSA entry and vice versa.
+
+```
+# false positive, code path not built into EVE
+CVE-2025-12345
+GHSA-xxxx-yyyy-zzzz  # accepted risk, tracked in issue #1234
+```
+
 ## Local Usage
 
 You can run the PR scanner locally to check a branch before pushing.
