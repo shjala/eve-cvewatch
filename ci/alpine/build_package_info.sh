@@ -86,7 +86,7 @@ trap 'rm -rf "$TMP_DIR"' EXIT INT TERM
 
 # clone the aports repository
 log_info "Cloning aports repository..."
-if ! git clone https://gitlab.alpinelinux.org/alpine/aports.git "$TMP_DIR/aports"; then
+if ! git clone --depth 1 --branch "$ALPINE_TAG" https://github.com/alpinelinux/aports.git "$TMP_DIR/aports"; then
     log_error "Failed to clone aports repository"
     exit 1
 fi
