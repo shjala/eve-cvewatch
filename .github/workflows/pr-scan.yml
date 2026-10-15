@@ -11,6 +11,16 @@ on:
         description: 'Revision to check out and scan'
         required: true
         type: string
+      eve-base-repo-url:
+        description: 'Git URL of the repository holding the base branch'
+        required: false
+        type: string
+        default: 'https://github.com/lf-edge/eve.git'
+      eve-base-ref:
+        description: 'Branch the PR targets; its tip is the comparison baseline'
+        required: false
+        type: string
+        default: 'master'
 
 jobs:
   pr-scan:
@@ -37,6 +47,8 @@ jobs:
         env:
           GIT_URL: ${{ inputs.eve-repo-url }}
           REVISION: ${{ inputs.eve-revision }}
+          BASE_URL: ${{ inputs.eve-base-repo-url }}
+          BASE_REF: ${{ inputs.eve-base-ref }}
         run: |
           cd cvewatch-tools
           
@@ -44,7 +56,7 @@ jobs:
           chmod +x ci/*.sh ci/alpine/*.sh ci/eve/*.sh
           
           echo "Running CVE Watch PR Scan..."
-          ./ci/pr-scan.sh "$GIT_URL" "$REVISION"
+          ./ci/pr-scan.sh "$GIT_URL" "$REVISION" "$BASE_URL" "$BASE_REF"
 
       - name: Upload Scan Report
         if: always()

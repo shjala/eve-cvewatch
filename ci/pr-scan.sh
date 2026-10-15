@@ -3,19 +3,21 @@
 # Copyright (c) 2026 Zededa, Inc.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Scan a PR for vulnerabilities and compare with master.
-# Usage: ./pr-scan.sh <GIT_URL> [REVISION]
+# Scan a PR for vulnerabilities and compare with the tip of its base branch.
+# Usage: ./pr-scan.sh <GIT_URL> [REVISION] [BASE_URL] [BASE_REF]
 
 set -euo pipefail
 
 if [ $# -lt 1 ]; then
-    echo "Usage: $0 <GIT_URL> [REVISION]"
+    echo "Usage: $0 <GIT_URL> [REVISION] [BASE_URL] [BASE_REF]"
     echo "Example: $0 https://github.com/lf-edge/eve.git master"
     exit 1
 fi
 
 GIT_URL="$1"
 REVISION="${2:-HEAD}"
+BASE_URL="${3:-https://github.com/lf-edge/eve.git}"
+BASE_REF="${4:-master}"
 
 # Directories
 BASE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -136,8 +138,10 @@ get_master_info() {
     local master_sbom_path="$TEMP_DIR/master-sbom.json"
     local master_version_path="$TEMP_DIR/master-alpine-version"
     
-    # Try to get from docker first
-    if log_cmd bash "$BASE_DIR/eve/get_sbom.sh" "master" "$master_sbom_path"; then
+    # Only lf-edge master has a per-commit image to pull; any other base is
+    # built from source.
+    if [ "$BASE_URL" = "https://github.com/lf-edge/eve.git" ] && [ "$BASE_REF" = "master" ] &&
+        log_cmd bash "$BASE_DIR/eve/get_sbom.sh" "master" "$master_sbom_path"; then
         # We need master's alpine version.
         # Fetch from GitHub raw content
         log_info "Fetching Master Alpine version..."
@@ -159,7 +163,7 @@ get_master_info() {
         fi
 
     else
-        log_warn "Failed to get master SBOM from docker image. Falling back to build from source."
+        log_warn "No base SBOM from a docker image. Building $BASE_URL $BASE_REF from source."
         
         if [ -z "${EVE_REPO_DIR:-}" ] || [ ! -d "$EVE_REPO_DIR" ]; then
              log_error "EVE source directory not found. Cannot build master."
@@ -167,8 +171,11 @@ get_master_info() {
         fi
 
         pushd "$EVE_REPO_DIR" > /dev/null
-        log_info "Checking out master..."
-        log_cmd git checkout master
+        # The clone is of the PR's repository, typically a fork whose own
+        # branches are stale, so fetch the base from BASE_URL.
+        log_info "Fetching $BASE_REF from $BASE_URL..."
+        log_cmd git fetch "$BASE_URL" "$BASE_REF"
+        log_cmd git checkout --detach FETCH_HEAD
         
         local commit_info
         commit_info=$(git log -1 --format='%h %s')
