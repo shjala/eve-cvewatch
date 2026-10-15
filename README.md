@@ -13,7 +13,6 @@ name: CVE PR Gate
 
 on:
   pull_request:
-    branches: [ "master" ]
 
 jobs:
   cve-scan:
@@ -22,7 +21,12 @@ jobs:
     with:
       eve-repo-url: ${{ github.event.pull_request.head.repo.clone_url }}
       eve-revision: ${{ github.event.pull_request.head.sha }}
+      eve-base-ref: ${{ github.event.pull_request.base.ref }}
 ```
+
+The baseline is the tip of `eve-base-ref` (default `master`) fetched from
+`eve-base-repo-url` (default `https://github.com/lf-edge/eve.git`), so a PR
+against a stable branch is compared with that branch rather than with master.
 
 ### Ignoring vulnerabilities
 
@@ -44,8 +48,9 @@ GHSA-xxxx-yyyy-zzzz  # accepted risk, tracked in issue #1234
 You can run the PR scanner locally to check a branch before pushing.
 
 ```bash
-# Usage: ./ci/pr-scan.sh <GIT_URL> [REVISION]
+# Usage: ./ci/pr-scan.sh <GIT_URL> [REVISION] [BASE_URL] [BASE_REF]
 ./ci/pr-scan.sh https://github.com/lf-edge/eve.git my-feature-branch
+./ci/pr-scan.sh https://github.com/me/eve.git my-backport https://github.com/lf-edge/eve.git 17.0-stable
 ```
 
 ## Full Scan with Upload
